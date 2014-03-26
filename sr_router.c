@@ -86,9 +86,9 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d on interface %s \n",len, interface);
 
 	/* copy packet */
-	uint8_t* pkt_cpy = malloc(sizeof(*packet)-sizeof(sr_ethernet_hdr_t));
+	uint8_t* pkt_cpy = malloc(len-sizeof(sr_ethernet_hdr_t));
 	memcpy(pkt_cpy, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t));
-
+printf("HI\n");
   uint16_t ethtype = ethertype(packet);
   switch(ethtype) {
  		case ethertype_arp:
