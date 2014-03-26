@@ -125,11 +125,14 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
   uint16_t cal_cksum = cksum(ip,len);  
 	if(rcv_cksum != cal_cksum) {
 		printf("***checksum mismatch***\n");
+		/* discard packet */
 	} else {
 		uint8_t ttl = ntohs(ip->ip_ttl)-1;
 		if(ttl == 0) {
-			/* ICMP packet: timeout */
+			/* send ICMP packet: timeout */
+
 		} else {
+			/* check min length */
 			ip->ip_ttl = htons(ttl);
 			ip->ip_sum = htons(cksum(ip, len));
 			/* IP packet manipulation complete */
@@ -148,8 +151,6 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 				*/
 			} else {
 				/* 
-					check min length
-					TTL handle/decrement, recalc ip chksum
 					check routing table for longest prefix match to get next hop IP/interface
 					check ARP cache for next hop MAC for next hop IP
 					if(miss)
