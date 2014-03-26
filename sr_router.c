@@ -76,8 +76,24 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(packet);
   assert(interface);
 
+
   printf("*** -> Received packet of length %d on interface %s \n",len, interface);
-  
+  uint16_t ethtype = ethertype(packet);
+  switch(ethtype) {
+      case ethertype_arp:
+          sr_handle_arp(sr, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t), interface);
+          break;
+      case ethertype_ip:
+          /* check min length */
+          sr_handle_ip(sr, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t));
+          break;
+  }
+/*  sr_ip_hdr_t* ip = (sr_ip_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
+  uint16_t chksum = ntohs(ip->ip_sum);
+  ip->ip_sum = htons(0);  
+  print_hdrs(packet, len);
+  uint16_t chksum2 = cksum(ip,len-sizeof(sr_ethernet_hdr_t));  
+  printf("cksum = %d cksum2 = %d\n",chksum, chksum2);*/
 
 }/* end sr_ForwardPacket */
 
