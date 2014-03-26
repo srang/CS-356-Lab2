@@ -76,8 +76,25 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(packet);
   assert(interface);
 
-  printf("*** -> Received packet of length %d on interface %s \n",len, interface);
-  
+ 	printf("*** -> Received packet of length %d on interface %s \n",len, interface);
 
-}/* end sr_ForwardPacket */
-
+	printf("IP packet\n");
+//	sr_ip_hdr* ip_hdr =
+	//check if router is not destination
+	//if(router IP(s) is not destination){
+		//check min length
+		//TTL handle/decrement, recalc ip chksum
+		//check routing table for longest prefix match to get next hop IP/interface
+		//check ARP cache for next hop MAC for next hop IP
+			//if(miss)
+				//send arp request add to queue
+				//resend request until timeout or reply
+			//else hit
+				//send packet	
+ 	//else destined for router interface
+		//if echo request, send ICMP echo_reply
+		//if echo reply, print cause it's prolly error
+		//if TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3
+		//if ARP request, send ARP reply
+		//if ARP reply, pass to ARP cache to cache and remove from queue
+}
