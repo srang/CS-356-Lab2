@@ -12,6 +12,8 @@
  **********************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
 
@@ -77,16 +79,18 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
 	/* copy packet */
+	uint8_t* pkt_cpy = malloc(sizeof(*packet)-sizeof(sr_ethernet_hdr_t));
+	memcpy(pkt_cpy, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t));
 
   printf("*** -> Received packet of length %d on interface %s \n",len, interface);
   uint16_t ethtype = ethertype(packet);
   switch(ethtype) {
  		case ethertype_arp:
-			sr_handle_arp(sr, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t), interface);
+			sr_handle_arp(sr, pkt_cpy, len-sizeof(sr_ethernet_hdr_t), interface);
       break;
     case ethertype_ip:
       /* check min length */
-      sr_handle_ip(sr, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t));
+      sr_handle_ip(sr, pkt_cpy, len-sizeof(sr_ethernet_hdr_t));
       break;
   }
 }
@@ -106,7 +110,8 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char
 			/* send arp_reply; */
 			break;
 		case arp_op_reply :
-			/* do something */
+			/* add mac and ip mapping */
+			/* remove req from queue */
 			break;
 	}
 	free(buf);
@@ -122,26 +127,25 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char
  *---------------------------------------------------------------------*/
 void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 	sr_ip_hdr_t* ip = (sr_ip_hdr_t*)buf;
+	/* check min length */
   uint16_t rcv_cksum = ntohs(ip->ip_sum);
   ip->ip_sum = 0;  
-  print_hdrs(buf, len);
   uint16_t cal_cksum = cksum(ip,len);  
 	if(rcv_cksum != cal_cksum) {
 		printf("***checksum mismatch***\n");
 		/* discard packet */
 	} else {
-		uint8_t ttl = ntohs(ip->ip_ttl)-1;
-		if(ttl == 0) {
+		uint8_t ttl = ntohs(ip->ip_ttl); /* check if zero */
+		if(ttl <= 1) {
 			/* send ICMP packet: timeout */
 
 		} else {
-			/* check min length */
-			ip->ip_ttl = htons(ttl);
+			ip->ip_ttl = htons(ttl - 1);
 			ip->ip_sum = htons(cksum(ip, len));
 			/* IP packet manipulation complete */
 			uint32_t addr = ntohs(ip->ip_dst);
 			struct sr_if* local_interface = sr->if_list;
-			while(addr == local_interface->ip && local_interface != NULL) {
+			while(addr != local_interface->ip && local_interface != NULL) {
 				local_interface = local_interface->next;
 			}
 			if(local_interface != NULL) {
@@ -155,7 +159,9 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 			} else {
 				
 				/*check routing table for longest prefix match to get next hop IP/interface*/
-				struct sr_rt* nxt_hp = sr_rt_search(sr, ip->ip_dst);
+				struct in_addr in_ip;
+				in_ip.s_addr = ip->ip_dst;
+				struct sr_rt* nxt_hp = sr_rt_search(sr, in_ip);
 				/* check ARP cache for next hop MAC for next hop IP */
 				if(nxt_hp == NULL) {
 					/* send ICMP host unreachable ? */
