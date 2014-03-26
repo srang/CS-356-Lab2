@@ -87,7 +87,7 @@ void sr_handlepacket(struct sr_instance* sr,
       sr_handle_ip(sr, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t));
       break;
   }
-}/* end sr_ForwardPacket */
+}
 
 /*---------------------------------------------------------------------
  * Method: sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface)
@@ -98,13 +98,13 @@ void sr_handlepacket(struct sr_instance* sr,
  *---------------------------------------------------------------------*/
 void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface) {
 	sr_arp_hdr_t* arp = (sr_arp_hdr_t*) buf;
-	sr_arp_opcode op = (sr_arp_opcode)ntohs(arp->ar_op);
+	enum sr_arp_opcode op = (enum sr_arp_opcode)ntohs(arp->ar_op);
 	switch(op) {
 		case arp_op_request : 
-			//send arp_reply;
+			/* send arp_reply; */
 			break;
 		case arp_op_reply :
-			//do something
+			/* do something */
 			break;
 	}
 }
@@ -121,7 +121,7 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 	sr_ip_hdr_t* ip = (sr_ip_hdr_t*)buf;
   uint16_t rcv_cksum = ntohs(ip->ip_sum);
   ip->ip_sum = 0;  
-  print_hdrs(packet, len);
+  print_hdrs(buf, len);
   uint16_t cal_cksum = cksum(ip,len);  
 	if(rcv_cksum != cal_cksum) {
 		printf("***checksum mismatch***\n");
@@ -131,28 +131,34 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 			/* ICMP packet: timeout */
 		} else {
 			ip->ip_ttl = htons(ttl);
-			ip->cksum = htons(cksum(ip, len));
+			ip->ip_sum = htons(cksum(ip, len));
 			/* IP packet manipulation complete */
 			uint32_t addr = ntohs(ip->ip_dst);
+			struct sr_if* local_interface = sr->if_list;
+			while(addr == local_interface->ip && local_interface != NULL) {
+				local_interface = local_interface->next;
+			}
+			if(local_interface != NULL) {
+				/* 
+				if echo request, send ICMP echo_reply
+				if echo reply, print cause it's prolly error
+				if TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3
+				if ARP request, send ARP reply
+				if ARP reply, pass to ARP cache to cache and remove from queue
+				*/
+			} else {
+				/* 
+					check min length
+					TTL handle/decrement, recalc ip chksum
+					check routing table for longest prefix match to get next hop IP/interface
+					check ARP cache for next hop MAC for next hop IP
+					if(miss)
+						send arp request add to queue
+						resend request until timeout or reply
+					else hit
+						send packet	
+				*/
+			}	
 		}
 	}
 }
-/* 
-	check if router is not destination
-	//if(router IP(s) is not destination){
-		//check min length
-		//TTL handle/decrement, recalc ip chksum
-		//check routing table for longest prefix match to get next hop IP/interface
-		//check ARP cache for next hop MAC for next hop IP
-			//if(miss)
-				//send arp request add to queue
-				//resend request until timeout or reply
-			//else hit
-				//send packet	
- 	//else destined for router interface
-		//if echo request, send ICMP echo_reply
-		//if echo reply, print cause it's prolly error
-		//if TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3
-		//if ARP request, send ARP reply
-		//if ARP reply, pass to ARP cache to cache and remove from queue*/
-
