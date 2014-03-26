@@ -76,11 +76,67 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(packet);
   assert(interface);
 
- 	printf("*** -> Received packet of length %d on interface %s \n",len, interface);
+  printf("*** -> Received packet of length %d on interface %s \n",len, interface);
+  uint16_t ethtype = ethertype(packet);
+  switch(ethtype) {
+ 		case ethertype_arp:
+			sr_handle_arp(sr, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t), interface);
+      break;
+    case ethertype_ip:
+      /* check min length */
+      sr_handle_ip(sr, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t));
+      break;
+  }
+}/* end sr_ForwardPacket */
 
-	printf("IP packet\n");
-//	sr_ip_hdr* ip_hdr =
-	//check if router is not destination
+/*---------------------------------------------------------------------
+ * Method: sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface)
+ * Scope:  Global
+ *
+ * This method handles the handling of arp packets, either forwarding, replying, etc.
+ *
+ *---------------------------------------------------------------------*/
+void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface) {
+	
+}
+
+/*---------------------------------------------------------------------
+ * Method: sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len)
+ * Scope:  Global
+ *
+ * This method handles the handling of ip packets, either forwarding, replying, etc.
+ * This also includes calculating the checksum
+ *
+ *---------------------------------------------------------------------*/
+void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
+	sr_ip_hdr_t* ip = (sr_ip_hdr_t*)buf;
+  uint16_t rcv_cksum = ntohs(ip->ip_sum);
+  ip->ip_sum = 0;  
+  print_hdrs(packet, len);
+  uint16_t cal_cksum = cksum(ip,len);  
+	if(rcv_cksum != cal_cksum) {
+		printf("***checksum mismatch***\n");
+	} else {
+		uint8_t ttl = ntohs(ip->ip_ttl)-1;
+		if(ttl == 0) {
+			/* ICMP packet: timeout */
+		} else {
+			ip->ip_ttl = htons(ttl);
+			ip->cksum = htons(cksum(ip, len));
+			/* IP packet manipulation complete */
+		}
+	}
+  printf("cksum = %d cksum2 = %d\n",chksum, chksum2);
+}
+/*  sr_ip_hdr_t* ip = (sr_ip_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
+  uint16_t chksum = ntohs(ip->ip_sum);
+  ip->ip_sum = htons(0);  
+  print_hdrs(packet, len);
+  uint16_t chksum2 = cksum(ip,len-sizeof(sr_ethernet_hdr_t));  
+  printf("cksum = %d cksum2 = %d\n",chksum, chksum2);
+
+	sr_ip_hdr* ip_hdr =
+	check if router is not destination
 	//if(router IP(s) is not destination){
 		//check min length
 		//TTL handle/decrement, recalc ip chksum
@@ -96,5 +152,5 @@ void sr_handlepacket(struct sr_instance* sr,
 		//if echo reply, print cause it's prolly error
 		//if TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3
 		//if ARP request, send ARP reply
-		//if ARP reply, pass to ARP cache to cache and remove from queue
-}
+		//if ARP reply, pass to ARP cache to cache and remove from queue*/
+
