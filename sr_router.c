@@ -76,6 +76,8 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(packet);
   assert(interface);
 
+	/* copy packet */
+
   printf("*** -> Received packet of length %d on interface %s \n",len, interface);
   uint16_t ethtype = ethertype(packet);
   switch(ethtype) {
@@ -107,6 +109,7 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char
 			/* do something */
 			break;
 	}
+	free(buf);
 }
 
 /*---------------------------------------------------------------------
@@ -150,16 +153,25 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 				if ARP reply, pass to ARP cache to cache and remove from queue
 				*/
 			} else {
-				/* 
-					check routing table for longest prefix match to get next hop IP/interface
-					check ARP cache for next hop MAC for next hop IP
-					if(miss)
-						send arp request add to queue
-						resend request until timeout or reply
-					else hit
-						send packet	
-				*/
+				
+				/*check routing table for longest prefix match to get next hop IP/interface*/
+				struct sr_rt* nxt_hp = sr_rt_search(sr, ip->ip_dst);
+				/* check ARP cache for next hop MAC for next hop IP */
+				if(nxt_hp == NULL) {
+					/* send ICMP host unreachable ? */
+				} else {
+					struct sr_arpentry* cache_ent = sr_arpcache_lookup(&sr->cache, (uint32_t)nxt_hp->dest.s_addr);
+					if(cache_ent == NULL) {
+						struct sr_arpreq* arpreq = sr_arpcache_queuereq(&sr->cache, (uint32_t)nxt_hp->dest.s_addr,
+														buf, len, nxt_hp->interface);
+					} else {
+						/* ARP cache hit */
+
+						/* send packet */
+					}
+				}
 			}	
 		}
 	}
+	free(buf);
 }

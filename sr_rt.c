@@ -23,6 +23,16 @@
 #include "sr_router.h"
 
 /*---------------------------------------------------------------------
+ * Method: sr_rt* sr_rt_search(struct sr_instance* sr, uint32_t ip_addr)
+ *
+ * searches for the longest prefix match ip address in the routing table
+ * and returns the next hop
+ *---------------------------------------------------------------------*/
+struct sr_rt* sr_rt_search(struct sr_instance* sr, uint32_t ip_addr) {
+
+	return NULL;	
+}
+/*---------------------------------------------------------------------
  * Method:
  *
  *---------------------------------------------------------------------*/
