@@ -97,7 +97,16 @@ void sr_handlepacket(struct sr_instance* sr,
  *
  *---------------------------------------------------------------------*/
 void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface) {
-	
+	sr_arp_hdr_t* arp = (sr_arp_hdr_t*) buf;
+	sr_arp_opcode op = (sr_arp_opcode)ntohs(arp->ar_op);
+	switch(op) {
+		case arp_op_request : 
+			//send arp_reply;
+			break;
+		case arp_op_reply :
+			//do something
+			break;
+	}
 }
 
 /*---------------------------------------------------------------------
@@ -124,18 +133,11 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 			ip->ip_ttl = htons(ttl);
 			ip->cksum = htons(cksum(ip, len));
 			/* IP packet manipulation complete */
+			uint32_t addr = ntohs(ip->ip_dst);
 		}
 	}
-  printf("cksum = %d cksum2 = %d\n",chksum, chksum2);
 }
-/*  sr_ip_hdr_t* ip = (sr_ip_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
-  uint16_t chksum = ntohs(ip->ip_sum);
-  ip->ip_sum = htons(0);  
-  print_hdrs(packet, len);
-  uint16_t chksum2 = cksum(ip,len-sizeof(sr_ethernet_hdr_t));  
-  printf("cksum = %d cksum2 = %d\n",chksum, chksum2);
-
-	sr_ip_hdr* ip_hdr =
+/* 
 	check if router is not destination
 	//if(router IP(s) is not destination){
 		//check min length
