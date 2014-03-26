@@ -69,6 +69,8 @@ void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void sr_handle_ip(struct sr_instance* , uint8_t * , unsigned int );
 void sr_handle_arp(struct sr_instance* , uint8_t * , unsigned int , char* );
+int send_arp_req(struct sr_instance* , struct sr_arpreq* );
+int send_arp_rep(struct sr_instance* , struct sr_if* , sr_arp_hdr_t* );
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );
