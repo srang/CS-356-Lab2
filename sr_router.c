@@ -24,6 +24,11 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
+/*
+ * local functions
+ */
+
+int send_arp_req(struct sr_instance* sr, struct sr_arpreq* arp_req);
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -78,17 +83,20 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(packet);
   assert(interface);
 
+  printf("*** -> Received packet of length %d on interface %s \n",len, interface);
+
 	/* copy packet */
 	uint8_t* pkt_cpy = malloc(sizeof(*packet)-sizeof(sr_ethernet_hdr_t));
 	memcpy(pkt_cpy, packet+sizeof(sr_ethernet_hdr_t), len-sizeof(sr_ethernet_hdr_t));
 
-  printf("*** -> Received packet of length %d on interface %s \n",len, interface);
   uint16_t ethtype = ethertype(packet);
   switch(ethtype) {
  		case ethertype_arp:
+			printf("ARP packet\n");
 			sr_handle_arp(sr, pkt_cpy, len-sizeof(sr_ethernet_hdr_t), interface);
       break;
     case ethertype_ip:
+			printf("IP packet\n");
       sr_handle_ip(sr, pkt_cpy, len-sizeof(sr_ethernet_hdr_t));
       break;
   }
@@ -179,3 +187,19 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 	}
 	free(buf);
 }
+int send_arp_req(struct sr_instance* sr, struct sr_arpreq* arp_req){
+	sr_arp_hdr_t* arp_hdr = malloc(sizeof(sr_arp_hdr_t));
+	struct sr_if* arp_if = sr_get_interface(sr, arp_req->packets->iface);
+	arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
+	/* arp_hdr->ar_pro = 0; */
+	arp_hdr->ar_hln = ETHER_ADDR_LEN;
+	arp_hdr->ar_pln = sizeof(uint32_t);
+	arp_hdr->ar_op  = htons(arp_op_request);
+	memcpy(arp_hdr->ar_sha, arp_if->addr, ETHER_ADDR_LEN);
+	arp_hdr->ar_sip = arp_if->ip;
+	arp_hdr->ar_tip = arp_req->ip;
+	int ret = sr_send_packet(sr, (uint8_t*)(arp_hdr), sizeof(*arp_hdr), "\xff\xff\xff\xff\xff\xff");
+	free(arp_hdr);
+	return ret;
+}
+
