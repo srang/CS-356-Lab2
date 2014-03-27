@@ -28,7 +28,6 @@
  * local functions
  */
 
-int send_arp_req(struct sr_instance* sr, struct sr_arpreq* arp_req);
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -110,14 +109,19 @@ void sr_handlepacket(struct sr_instance* sr,
  *
  *---------------------------------------------------------------------*/
 void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface) {
+	printf("Interface = %s \n", interface);
 	sr_arp_hdr_t* arp = (sr_arp_hdr_t*) buf;
 	enum sr_arp_opcode op = (enum sr_arp_opcode)ntohs(arp->ar_op);
+	struct sr_if* iface = sr_get_interface(sr, interface);
 	switch(op) {
 		case arp_op_request : 
-			/* send arp_reply; */
+			printf("Sending ARP reply\n");
+			send_arp_rep(sr, iface, arp);
 			break;
 		case arp_op_reply :
 			/* add mac and ip mapping */
+			printf("Updating arp cache\n");
+			sr_arpcache_insert(&sr->cache, arp->ar_sha, arp->ar_sip);
 			/* sr_arpreq_destroy is handled in arpcache */
 			break;
 	}
@@ -159,8 +163,6 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 				if echo request, send ICMP echo_reply
 				if echo reply, print cause it's prolly error
 				if TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3
-				if ARP request, send ARP reply
-				if ARP reply, pass to ARP cache to cache and remove from queue
 				*/
 			} else {
 				
@@ -203,3 +205,18 @@ int send_arp_req(struct sr_instance* sr, struct sr_arpreq* arp_req){
 	return ret;
 }
 
+int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req){
+	sr_arp_hdr_t* arp_hdr = malloc(sizeof(sr_arp_hdr_t));
+	arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
+	/* arp_hdr->ar_pro = 0; */
+	arp_hdr->ar_hln = ETHER_ADDR_LEN;
+	arp_hdr->ar_pln = sizeof(uint32_t);
+	arp_hdr->ar_op  = htons(arp_op_reply);
+	memcpy(arp_hdr->ar_sha, req_if->addr, ETHER_ADDR_LEN);
+	arp_hdr->ar_sip = req_if->ip;
+	memcpy(arp_hdr->ar_tha, req->ar_sha, ETHER_ADDR_LEN);
+	arp_hdr->ar_tip = req->ar_sip;
+	int ret = sr_send_packet(sr, (uint8_t*)(arp_hdr), sizeof(*arp_hdr), req_if->name);
+	free(arp_hdr);
+	return ret;
+}
