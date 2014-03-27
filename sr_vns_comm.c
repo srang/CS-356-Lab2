@@ -535,7 +535,6 @@ sr_ether_addrs_match_interface( struct sr_instance* sr, /* borrowed */
         return 0;
     }
 
-		printf("iface addr: %s\n", iface->addr);
     if ( memcmp( ether_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN) != 0 ){
         fprintf( stderr, "** Error, source address does not match interface\n");
         return 0;
@@ -591,7 +590,7 @@ int sr_send_packet(struct sr_instance* sr /* borrowed */,
 
     /* -- log packet -- */
     sr_log_packet(sr,buf,len);
-
+    print_hdrs(buf, len);
     if ( ! sr_ether_addrs_match_interface( sr, buf, iface) ){
         fprintf( stderr, "*** Error: problem with ethernet header, check log\n");
         free ( sr_pkt );

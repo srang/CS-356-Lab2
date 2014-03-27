@@ -34,7 +34,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			} else {
 				req_i->times_sent++;
 				req_i->sent = time(0);
-				/* send arp_req */
+				send_arp_req(sr, req_i);
 				req_i = req_i->next;
 			}
 		}
