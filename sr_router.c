@@ -89,7 +89,6 @@ void sr_handlepacket(struct sr_instance* sr,
 			sr_handle_arp(sr, pkt_cpy, len-sizeof(sr_ethernet_hdr_t), interface);
       break;
     case ethertype_ip:
-      /* check min length */
       sr_handle_ip(sr, pkt_cpy, len-sizeof(sr_ethernet_hdr_t));
       break;
   }
@@ -111,10 +110,9 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char
 			break;
 		case arp_op_reply :
 			/* add mac and ip mapping */
-			/* remove req from queue */
+			/* sr_arpreq_destroy is handled in arpcache */
 			break;
 	}
-	free(buf);
 }
 
 /*---------------------------------------------------------------------
@@ -145,10 +143,10 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 			/* IP packet manipulation complete */
 			uint32_t addr = ntohs(ip->ip_dst);
 			struct sr_if* local_interface = sr->if_list;
-			while(addr != local_interface->ip && local_interface != NULL) {
+			while(addr != local_interface->ip && local_interface != 0) {
 				local_interface = local_interface->next;
 			}
-			if(local_interface != NULL) {
+			if(local_interface != 0) {
 				/* 
 				if echo request, send ICMP echo_reply
 				if echo reply, print cause it's prolly error
@@ -163,17 +161,17 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 				in_ip.s_addr = ip->ip_dst;
 				struct sr_rt* nxt_hp = sr_rt_search(sr, in_ip);
 				/* check ARP cache for next hop MAC for next hop IP */
-				if(nxt_hp == NULL) {
-					/* send ICMP host unreachable ? */
+				if(nxt_hp == 0) {
+					/* send ICMP net unreachable */
 				} else {
 					struct sr_arpentry* cache_ent = sr_arpcache_lookup(&sr->cache, (uint32_t)nxt_hp->dest.s_addr);
-					if(cache_ent == NULL) {
-						struct sr_arpreq* arpreq = sr_arpcache_queuereq(&sr->cache, (uint32_t)nxt_hp->dest.s_addr,
-														buf, len, nxt_hp->interface);
+					if(cache_ent == 0) {
+						/* cache miss, send arp_req */
+						sr_arpcache_queuereq(&sr->cache, (uint32_t)nxt_hp->dest.s_addr,buf, len, nxt_hp->interface);
 					} else {
 						/* ARP cache hit */
-
 						/* send packet */
+						printf("*********** ERROR: ARP Cache hit without request *********\n");
 					}
 				}
 			}	

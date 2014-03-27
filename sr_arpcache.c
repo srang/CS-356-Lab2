@@ -17,8 +17,28 @@
   See the comments in the header file for an idea of what it should look like.
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-		struct sr_arpreq* req = sr->cache.requests;
-
+	struct sr_arpreq* req_i = sr->cache.requests;
+	while(req_i != 0) {
+		struct sr_arpentry* entry = sr_arpcache_lookup(&sr->cache, req_i->ip);
+		if(entry) {
+			/* cache hit, send all associated packets and free reqs/packets */
+			struct sr_arpreq* next = req_i->next;
+			sr_arpreq_destroy(&sr->cache, req_i);
+			req_i = next;
+		} else if(difftime(time(0),req_i->sent) > 1.0) {
+			if(req_i->times_sent >= 5) {
+				/* ICMP destination host unreachable */
+				struct sr_arpreq* next = req_i->next;
+				sr_arpreq_destroy(&sr->cache, req_i);
+				req_i = next;
+			} else {
+				req_i->times_sent++;
+				req_i->sent = time(0);
+				/* send arp_req */
+				req_i = req_i->next;
+			}
+		}
+	}	
 }
 
 /* You should not need to touch the rest of this code. */

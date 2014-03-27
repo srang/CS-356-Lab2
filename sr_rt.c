@@ -30,7 +30,7 @@
  *---------------------------------------------------------------------*/
 struct sr_rt* sr_rt_search(struct sr_instance* sr, struct in_addr dest) {
 	struct sr_rt* rt_i = sr->routing_table;
-	struct sr_rt* best_match = rt_i;
+	struct sr_rt* best_match = 0;
 	uint32_t match_len = 0;
 	while (rt_i != 0) {
 		/* compare ip addr components */
