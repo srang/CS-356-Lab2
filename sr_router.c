@@ -234,6 +234,7 @@ int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req
 	free(block);
 	return ret;
 }
+
 int send_icmp_pkt(struct sr_instance* sr, uint8_t* buf, uint8_t type, uint8_t code) {
 	uint8_t* block = 0;
 	switch(type) {
@@ -265,7 +266,7 @@ int send_icmp_pkt(struct sr_instance* sr, uint8_t* buf, uint8_t type, uint8_t co
 			icmp_timeout->unused = 0;
 			icmp_timeout->next_mtu = 0;
 			memcpy(icmp_timeout->data, buf, ICMP_DATA_SIZE);
-			icmp_timeout->icmp_sum = cksum(icmp_error, sizeof(sr_icmp_t3_hdr_t));
+			icmp_timeout->icmp_sum = cksum(icmp_timeout, sizeof(sr_icmp_t3_hdr_t));
 			break;
 		default:
 			/* shouldn't arrive here in our system setup */
@@ -288,8 +289,11 @@ int send_icmp_pkt(struct sr_instance* sr, uint8_t* buf, uint8_t type, uint8_t co
 	ip_icmp_error->ip_dst = ((sr_ip_hdr_t*)(buf))->ip_src;
 	struct in_addr i;
 	i.s_addr = ip_icmp_error->ip_dst;
-	ip_icmp_error->ip_src = sr_get_interface(sr, (sr_rt_search(sr, i))->interface)->ip;
+	char* iface = (sr_rt_search(sr, i))->interface;
+	ip_icmp_error->ip_src =  sr_get_interface(sr, iface)->ip;
 	ip_icmp_error->ip_sum = 0;
 	ip_icmp_error->ip_sum = cksum(ip_icmp_error, sizeof(sr_ip_hdr_t));
+	/* add to arp req queue */
+	sr_arpcache_queuereq(&sr->cache, ip_icmp_error->ip_dst, block, sizeof(block), iface);
 	return 0;
 }
