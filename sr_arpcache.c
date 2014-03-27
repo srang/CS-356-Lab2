@@ -22,16 +22,30 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 		struct sr_arpentry* entry = sr_arpcache_lookup(&sr->cache, req_i->ip);
 		if(entry) {
 			/* cache hit, send all associated packets and free reqs/packets */
-			struct sr_arpreq* next = req_i->next;
+            printf("cache hit\n");
+            struct sr_packet* pkt_req = req_i->packets;
+            while(pkt_req != 0) {
+                sr_ip_hdr_t* ip_pkt = (sr_ip_hdr_t*) pkt_req->buf;            
+                uint8_t* block = malloc(pkt_req->len + sizeof(sr_ethernet_hdr_t));
+                memcpy(block+sizeof(sr_ethernet_hdr_t),ip_pkt, pkt_req->len);
+                sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*)block;
+                struct sr_if* interf = sr_get_interface(sr, pkt_req->iface);
+                memcpy(eth_hdr->ether_dhost, entry->mac, ETHER_ADDR_LEN);
+                memcpy(eth_hdr->ether_shost, interf->addr, ETHER_ADDR_LEN);
+                eth_hdr->ether_type = htons(ethertype_ip);
+                sr_send_packet(sr, block, pkt_req->len + sizeof(sr_ethernet_hdr_t), pkt_req->iface);
+                pkt_req = pkt_req->next;
+            }
 			sr_arpreq_destroy(&sr->cache, req_i);
-			req_i = next;
+            printf("entry destroyed\n");
+			req_i = sr->cache.requests;
 		} else if(difftime(time(0),req_i->sent) > 1.0) {
 			if(req_i->times_sent >= 5) {
 				/* ICMP destination host unreachable */
 				send_icmp_pkt(sr, req_i->packets->buf, icmp_unreachable, icmp_host);
-				struct sr_arpreq* next = req_i->next;
 				sr_arpreq_destroy(&sr->cache, req_i);
-				req_i = next;
+                printf("entry timed out and destroyed\n");
+				req_i = sr->cache.requests;
 			} else {
 				req_i->times_sent++;
 				req_i->sent = time(0);

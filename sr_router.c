@@ -138,25 +138,26 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 		return;
 	}
   uint16_t rcv_cksum = ntohs(ip->ip_sum);
+  
   ip->ip_sum = 0;  
-  uint16_t cal_cksum = cksum(ip,sizeof(sr_ip_hdr_t));  
+  uint16_t cal_cksum = ntohs(cksum(ip,sizeof(sr_ip_hdr_t)));  
 	if(rcv_cksum != cal_cksum) {
 		printf("***checksum mismatch***\n");
 		/* discard packet */
 	} else {
 		printf("***checksum match***\n");
-		uint8_t ttl = ntohs(ip->ip_ttl); /* check if zero */
+		uint8_t ttl = ip->ip_ttl; /* check if zero */
 		if(ttl <= 1) {
 			/* send ICMP packet: timeout */
 			printf("packet timed out\n");
 			send_icmp_pkt(sr, buf, icmp_time_exceeded, icmp_ttl_exceeded);
 		} else {
-			ip->ip_ttl = htons(ttl - 1);
-			ip->ip_sum = htons(cksum(ip, len));
+			ip->ip_ttl = ttl - 1;
+			ip->ip_sum = htons(cksum(ip, sizeof(sr_ip_hdr_t)));
 			/* IP packet manipulation complete */
 			uint32_t addr = ntohs(ip->ip_dst);
 			struct sr_if* local_interface = sr->if_list;
-			while(addr != local_interface->ip && local_interface != 0) {
+			while(local_interface != 0 && addr != local_interface->ip) {
 				local_interface = local_interface->next;
 			}
 			if(local_interface != 0) {
@@ -173,54 +174,61 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 				}
 			} else {
 				/*check routing table for longest prefix match to get next hop IP/interface*/
+                printf("checking routing table\n");
 				struct in_addr in_ip;
 				in_ip.s_addr = ip->ip_dst;
 				struct sr_rt* nxt_hp = sr_rt_search(sr, in_ip);
 				/* check ARP cache for next hop MAC for next hop IP */
 				if(nxt_hp == 0) {
+                    printf("next hop not found\n");
 					/* send ICMP net unreachable */
+                    send_icmp_pkt(sr, buf, icmp_unreachable, icmp_net);
 				} else {
-					struct sr_arpentry* cache_ent = sr_arpcache_lookup(&sr->cache, (uint32_t)nxt_hp->dest.s_addr);
-					if(cache_ent == 0) {
+                    printf("found next hop\n");
+					/*struct sr_arpentry* cache_ent = sr_arpcache_lookup(&sr->cache, (uint32_t)nxt_hp->dest.s_addr);
+					if(cache_ent == 0) {*/
 						/* cache miss, send arp_req */
 						sr_arpcache_queuereq(&sr->cache, (uint32_t)nxt_hp->dest.s_addr,buf, len, nxt_hp->interface);
-					} else {
-						/* ARP cache hit */
-						/* send packet */
+                        printf("create and add arp req\n");
+					/*} else {
+						 ARP cache hit 
+						 send packet 
 						printf("*********** ERROR: ARP Cache hit without request *********\n");
-					}
+					}*/
 				}
 			}	
 		}
 	}
-	free(buf);
 }
 int send_arp_req(struct sr_instance* sr, struct sr_arpreq* arp_req){
+    printf("sending arp_req\n");
     uint8_t* block = malloc(sizeof(sr_arp_hdr_t)+sizeof(sr_ethernet_hdr_t));
-	sr_arp_hdr_t* arp_hdr = (sr_arp_hdr_t*)block;
-    sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*)(block+sizeof(sr_ethernet_hdr_t));
+	sr_arp_hdr_t* arp_hdr = (sr_arp_hdr_t*)(block+sizeof(sr_ethernet_hdr_t));
+    sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*)(block);
 	struct sr_if* arp_if = sr_get_interface(sr, arp_req->packets->iface);
 
     /* modify/populate ARP header */
 	arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
 	arp_hdr->ar_hln = ETHER_ADDR_LEN;
+    arp_hdr->ar_pro = htons(0x0800);
 	arp_hdr->ar_pln = sizeof(uint32_t);
 	arp_hdr->ar_op  = htons(arp_op_request);
 	memcpy(arp_hdr->ar_sha, arp_if->addr, ETHER_ADDR_LEN);
 	arp_hdr->ar_sip = arp_if->ip;
-	memcpy(arp_hdr->ar_tha, "\xff\xff\xff\xff\xff\xff", ETHER_ADDR_LEN);
+	memset(arp_hdr->ar_tha, 255, ETHER_ADDR_LEN);
 	arp_hdr->ar_tip = arp_req->ip;
 
     /* modify/populate MAC header */
-    memcpy(eth_hdr->ether_dhost, "\xff\xff\xff\xff\xff\xff", ETHER_ADDR_LEN);
+    memset(eth_hdr->ether_dhost, 255, ETHER_ADDR_LEN);
     memcpy(eth_hdr->ether_shost, arp_if->addr, ETHER_ADDR_LEN);
     eth_hdr->ether_type = htons(ethertype_arp);
-	int ret = sr_send_packet(sr, (uint8_t*)(arp_hdr), sizeof(*arp_hdr), "\xff\xff\xff\xff\xff\xff");
+	int ret = sr_send_packet(sr, block, sizeof(sr_ethernet_hdr_t)+sizeof(sr_arp_hdr_t), arp_if->name);
 	free(block);
 	return ret;
 }
 
 int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req){
+    printf("sending arp_reply\n");
     uint8_t* block = malloc(sizeof(sr_arp_hdr_t)+sizeof(sr_ethernet_hdr_t));
 	sr_arp_hdr_t* arp_hdr = (sr_arp_hdr_t*)(block+sizeof(sr_ethernet_hdr_t));
     sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*)(block);
@@ -248,6 +256,7 @@ int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req
 }
 
 int send_icmp_pkt(struct sr_instance* sr, uint8_t* buf, uint8_t type, uint8_t code) {
+    printf("sending icmp packet\n");
 	uint8_t* block = 0;
 	switch(type) {
 		case icmp_unreachable:
