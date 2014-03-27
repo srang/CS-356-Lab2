@@ -28,6 +28,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 		} else if(difftime(time(0),req_i->sent) > 1.0) {
 			if(req_i->times_sent >= 5) {
 				/* ICMP destination host unreachable */
+				send_icmp_pkt(sr, req_i->packets->buf, icmp_unreachable, icmp_host);
 				struct sr_arpreq* next = req_i->next;
 				sr_arpreq_destroy(&sr->cache, req_i);
 				req_i = next;

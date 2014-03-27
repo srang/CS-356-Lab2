@@ -130,19 +130,25 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char
  *
  *---------------------------------------------------------------------*/
 void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
-    printf("IP\n");
+  printf("IP\n");
 	sr_ip_hdr_t* ip = (sr_ip_hdr_t*)buf;
 	/* check min length */
+	if(len < sizeof(sr_ip_hdr_t)) {
+		printf("Packet too small to be valid\n");
+		return;
+	}
   uint16_t rcv_cksum = ntohs(ip->ip_sum);
   ip->ip_sum = 0;  
-  uint16_t cal_cksum = cksum(ip,len);  
+  uint16_t cal_cksum = cksum(ip,sizeof(sr_ip_hdr_t));  
 	if(rcv_cksum != cal_cksum) {
 		printf("***checksum mismatch***\n");
 		/* discard packet */
 	} else {
+		printf("***checksum match***\n");
 		uint8_t ttl = ntohs(ip->ip_ttl); /* check if zero */
 		if(ttl <= 1) {
 			/* send ICMP packet: timeout */
+			printf("packet timed out\n");
 			send_icmp_pkt(sr, buf, icmp_time_exceeded, icmp_ttl_exceeded);
 		} else {
 			ip->ip_ttl = htons(ttl - 1);
@@ -154,12 +160,18 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 				local_interface = local_interface->next;
 			}
 			if(local_interface != 0) {
-				/* 
-				if echo request, send ICMP echo_reply
-				if TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3
-				*/
+				printf("packet sent to local addr\n");
+				if(ip->ip_p == ip_protocol_icmp) {
+					/*struct sr_icmp_hdr_t* icmp = (sr_icmp_hdr_t*)(buf + sizeof(sr_ip_hdr_t));
+					if(icmp->icmp_type == icmp_echo) {
+						send_icmp_pkt(sr, buf, icmp_echo_reply, 0);
+						printf("echo request\n");
+					}*/
+				} else {
+					/* TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3 */
+					send_icmp_pkt(sr, buf, icmp_unreachable, icmp_port);
+				}
 			} else {
-				
 				/*check routing table for longest prefix match to get next hop IP/interface*/
 				struct in_addr in_ip;
 				in_ip.s_addr = ip->ip_dst;
@@ -230,7 +242,7 @@ int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req
     eth_hdr->ether_type = htons(ethertype_arp);
 
 	int ret = sr_send_packet(sr, block, sizeof(sr_arp_hdr_t)+sizeof(sr_ethernet_hdr_t), req_if->name);
-    if(ret != 0) { printf("SFAFADFA\n"); }
+    if(ret != 0) { printf("ARP failed to send\n"); }
 	free(block);
 	return ret;
 }
