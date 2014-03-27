@@ -102,11 +102,12 @@ void sr_handlepacket(struct sr_instance* sr,
 }
 
 /*---------------------------------------------------------------------
- * Method: sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface)
+ * Method: sr_handle_arp(struct sr_instance* sr, uint8_t * buf, 
+ * 							unsigned int len, char* interface)
  * Scope:  Global
  *
  * This method handles the handling of arp packets, either forwarding, replying, etc.
- *
+ * interface = name_version (e.g. "eth1")
  *---------------------------------------------------------------------*/
 void sr_handle_arp(struct sr_instance* sr, uint8_t * buf, unsigned int len, char* interface) {
 	printf("Interface = %s \n", interface);
@@ -161,7 +162,6 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 			if(local_interface != 0) {
 				/* 
 				if echo request, send ICMP echo_reply
-				if echo reply, print cause it's prolly error
 				if TCP/UDP payload, discard and send ICMP port unreachable type 3 code 3
 				*/
 			} else {
@@ -190,6 +190,7 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 	free(buf);
 }
 int send_arp_req(struct sr_instance* sr, struct sr_arpreq* arp_req){
+	printf("creating arp_request packet\n");
 	sr_arp_hdr_t* arp_hdr = malloc(sizeof(sr_arp_hdr_t));
 	struct sr_if* arp_if = sr_get_interface(sr, arp_req->packets->iface);
 	arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
@@ -206,6 +207,7 @@ int send_arp_req(struct sr_instance* sr, struct sr_arpreq* arp_req){
 }
 
 int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req){
+	printf("creating arp_reply packet\n");
 	sr_arp_hdr_t* arp_hdr = malloc(sizeof(sr_arp_hdr_t));
 	arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
 	/* arp_hdr->ar_pro = 0; */
@@ -219,4 +221,9 @@ int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req
 	int ret = sr_send_packet(sr, (uint8_t*)(arp_hdr), sizeof(*arp_hdr), req_if->name);
 	free(arp_hdr);
 	return ret;
+}
+int send_icmp_pkt(struct sr_instance* sr, uint8_t* buf, uint8_t type, uint8_t code) {
+	/* switch on type */
+		/* if type3 use type 3 hdr */
+
 }
