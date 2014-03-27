@@ -75,6 +75,12 @@
   #endif
 #endif
 #define ICMP_DATA_SIZE 28
+#ifndef IP_DEFAULTS
+	#define IP_TTL_DEF 64
+	#define IP_OFF_DEF 0
+	#define IP_TOS_DEF 0x0000
+	#define IP_DEFAULTS
+#endif
 
 
 /* Structure of a ICMP header
@@ -101,7 +107,18 @@ struct sr_icmp_t3_hdr {
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_t3_hdr sr_icmp_t3_hdr_t;
 
+enum sr_icmp_type {
+	icmp_echo						= 0x0000,
+  icmp_unreachable 		= 0x0003,
+  icmp_echo_reply 		= 0x0008,
+	icmp_time_exceeded	= 0x0011,
+};
 
+enum sr_icmp_code {
+  icmp_net, icmp_ttl_exceeded			= 0x0000,
+  icmp_host 											= 0x0001,
+  icmp_port 											= 0x0003,
+};
 
 
 /*

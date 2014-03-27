@@ -71,6 +71,7 @@ void sr_handle_ip(struct sr_instance* , uint8_t * , unsigned int );
 void sr_handle_arp(struct sr_instance* , uint8_t * , unsigned int , char* );
 int send_arp_req(struct sr_instance* , struct sr_arpreq* );
 int send_arp_rep(struct sr_instance* , struct sr_if* , sr_arp_hdr_t* );
+int send_icmp_pkt(struct sr_instance* , uint8_t* , uint8_t , uint8_t );
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );

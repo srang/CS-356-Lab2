@@ -83,8 +83,6 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
   printf("*** -> Received packet of length %d on interface %s \n",len, interface);
-  print_hdrs(packet, len);
-
 	/* copy packet */
   uint16_t ethtype = ethertype(packet);
   switch(ethtype) {
@@ -145,7 +143,7 @@ void sr_handle_ip(struct sr_instance* sr, uint8_t * buf, unsigned int len) {
 		uint8_t ttl = ntohs(ip->ip_ttl); /* check if zero */
 		if(ttl <= 1) {
 			/* send ICMP packet: timeout */
-
+			send_icmp_pkt(sr, buf, icmp_time_exceeded, icmp_ttl_exceeded);
 		} else {
 			ip->ip_ttl = htons(ttl - 1);
 			ip->ip_sum = htons(cksum(ip, len));
@@ -237,7 +235,61 @@ int send_arp_rep(struct sr_instance* sr, struct sr_if* req_if, sr_arp_hdr_t* req
 	return ret;
 }
 int send_icmp_pkt(struct sr_instance* sr, uint8_t* buf, uint8_t type, uint8_t code) {
-	/* switch on type */
-		/* if type3 use type 3 hdr */
-    return 0;
+	uint8_t* block = 0;
+	switch(type) {
+		case icmp_unreachable:
+			block = malloc(sizeof(sr_icmp_t3_hdr_t)+sizeof(sr_ip_hdr_t)+sizeof(sr_ethernet_hdr_t));
+			sr_icmp_t3_hdr_t* icmp_error = (sr_icmp_t3_hdr_t*)(block + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+			icmp_error->icmp_type = type;
+			icmp_error->icmp_code = code;
+			icmp_error->icmp_sum  = 0;
+			icmp_error->unused = 0;
+			icmp_error->next_mtu = 0;
+			memcpy(icmp_error->data, buf, ICMP_DATA_SIZE);
+			icmp_error->icmp_sum = cksum(icmp_error, sizeof(sr_icmp_t3_hdr_t));
+			break;
+		case icmp_echo_reply:
+			block = malloc(sizeof(sr_icmp_hdr_t)+sizeof(sr_ip_hdr_t)+sizeof(sr_ethernet_hdr_t));
+			sr_icmp_hdr_t* icmp_echo = (sr_icmp_hdr_t*)(block + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+			icmp_echo->icmp_type = type;
+			icmp_echo->icmp_code = code;
+			icmp_echo->icmp_sum  = 0;
+			icmp_echo->icmp_sum = cksum(icmp_echo, sizeof(sr_icmp_hdr_t));
+			break;
+		case icmp_time_exceeded:
+			block = malloc(sizeof(sr_icmp_t3_hdr_t)+sizeof(sr_ip_hdr_t)+sizeof(sr_ethernet_hdr_t));
+			sr_icmp_t3_hdr_t* icmp_timeout = (sr_icmp_t3_hdr_t*)(block + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+			icmp_timeout->icmp_type = type;
+			icmp_timeout->icmp_code = code;
+			icmp_timeout->icmp_sum  = 0;
+			icmp_timeout->unused = 0;
+			icmp_timeout->next_mtu = 0;
+			memcpy(icmp_timeout->data, buf, ICMP_DATA_SIZE);
+			icmp_timeout->icmp_sum = cksum(icmp_error, sizeof(sr_icmp_t3_hdr_t));
+			break;
+		default:
+			/* shouldn't arrive here in our system setup */
+			break;
+	}
+	/* populate IP header */
+	sr_ip_hdr_t* ip_icmp_error = (sr_ip_hdr_t*)(block+sizeof(sr_ethernet_hdr_t));
+	ip_icmp_error->ip_hl = sizeof(sr_ip_hdr_t);
+	ip_icmp_error->ip_v  = 4;
+	ip_icmp_error->ip_tos = 0x0000;
+	if(type == icmp_unreachable || type == icmp_time_exceeded) {
+		ip_icmp_error->ip_len = sizeof(sr_icmp_t3_hdr_t)+sizeof(sr_ip_hdr_t);
+	} else {
+		ip_icmp_error->ip_len = sizeof(sr_icmp_hdr_t)+sizeof(sr_ip_hdr_t);
+	}
+	ip_icmp_error->ip_id 	= ((sr_ip_hdr_t*)(buf))->ip_id;
+	ip_icmp_error->ip_off = htons(IP_DF);
+	ip_icmp_error->ip_ttl = IP_TTL; 
+	ip_icmp_error->ip_p 	= ip_protocol_icmp;
+	ip_icmp_error->ip_dst = ((sr_ip_hdr_t*)(buf))->ip_src;
+	struct in_addr i;
+	i.s_addr = ip_icmp_error->ip_dst;
+	ip_icmp_error->ip_src = sr_get_interface(sr, (sr_rt_search(sr, i))->interface)->ip;
+	ip_icmp_error->ip_sum = 0;
+	ip_icmp_error->ip_sum = cksum(ip_icmp_error, sizeof(sr_ip_hdr_t));
+	return 0;
 }
